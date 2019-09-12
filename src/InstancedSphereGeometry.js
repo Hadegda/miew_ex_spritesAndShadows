@@ -1,0 +1,120 @@
+//import utils from '../../utils';
+import CylinderBufferGeometry from './CylinderBufferGeometry';
+
+const tmpColor = new THREE.Color();
+
+const OFFSET_SIZE = 4;
+const COLOR_SIZE = 3;
+//const { copySubArrays } = utils;
+
+function allocateTyped(TypedArrayName, size) {
+    let result = null;
+    try {
+        result = new TypedArrayName(size);
+    } catch (e) {
+        if (e instanceof RangeError) {
+            throw new OutOfMemoryError(e.message);
+        } else {
+            throw e;
+        }
+    }
+    return result;
+}
+
+function fill(array, value) {
+    let start, end;
+    var length = array.length;
+
+    start = 0;
+    end = length;
+    while (start < end) {
+        array[start++] = value;
+    }
+    return array;
+}
+
+function setArrayXYZ(arr, idx, x, y, z) {
+    arr[idx] = x;
+    arr[idx + 1] = y;
+    arr[idx + 2] = z;
+}
+
+function setArrayXYZW(arr, idx, x, y, z, w) {
+    arr[idx] = x;
+    arr[idx + 1] = y;
+    arr[idx + 2] = z;
+    arr[idx + 3] = w;
+}
+class InstancedSpheresGeometry extends CylinderBufferGeometry(THREE.InstancedBufferGeometry) {
+    constructor(spheresCount) {
+        super(spheresCount);
+        this._sphGeometry = new THREE.PlaneBufferGeometry(2, 2, 1, 1);
+        this._init(spheresCount, this._sphGeometry);
+    }
+
+    setItem(itemIdx, itemPos, itemRad) {
+        setArrayXYZW(this._offsets, itemIdx * OFFSET_SIZE, itemPos.x, itemPos.y, itemPos.z, itemRad);
+        this.setSphere(itemIdx, itemPos, itemRad);
+    }
+
+    setColor(itemIdx, colorVal) {
+        tmpColor.set(colorVal);
+        if (itemIdx === 0) {
+            setArrayXYZ(this._colors, itemIdx * COLOR_SIZE, 0.0, 1.0, 0.0);
+        } else {
+            if (itemIdx === 1) {
+                setArrayXYZ(this._colors, itemIdx * COLOR_SIZE, 0.0, 1.0, 1.0);
+            } else {
+                setArrayXYZ(this._colors, itemIdx * COLOR_SIZE, tmpColor.r, tmpColor.g, tmpColor.b);
+            }
+        }
+    }
+
+    startUpdate() {
+        return true;
+    }
+
+    finishUpdate() {
+        this.getAttribute('offset').needsUpdate = true;
+        this.getAttribute('color').needsUpdate = true;
+    }
+
+    finalize() {
+        this.finishUpdate();
+        this.computeBoundingSphere();
+    }
+
+    setOpacity(chunkIndices, value) {
+        const alphaArr = this._alpha;
+        for (let i = 0, n = chunkIndices.length; i < n; ++i) {
+            alphaArr[chunkIndices[i]] = value;
+        }
+        this.getAttribute('alphaColor').needsUpdate = true;
+    }
+
+    /*getSubset(chunkIndices) {
+        const instanceCount = chunkIndices.length;
+        const geom = new THREE.InstancedBufferGeometry();
+        this._init.call(geom, instanceCount, this._sphGeometry);
+
+        copySubArrays(this._offsets, geom._offsets, chunkIndices, OFFSET_SIZE);
+        copySubArrays(this._colors, geom._colors, chunkIndices, COLOR_SIZE);
+        geom.boundingSphere = this.boundingSphere;
+        geom.boundingBox = this.boundingBox;
+        return [geom];
+    }*/
+
+    _init(spheresCount, sphereGeo) {
+        this.copy(sphereGeo);
+
+        this._offsets = allocateTyped(Float32Array, spheresCount * OFFSET_SIZE);
+        this._colors = allocateTyped(Float32Array, spheresCount * COLOR_SIZE);
+        const alpha = this._alpha = allocateTyped(Float32Array, spheresCount);
+        fill(alpha, 1.0);
+
+        this.addAttribute('offset', new THREE.InstancedBufferAttribute(this._offsets, OFFSET_SIZE, false, 1));
+        this.addAttribute('color', new THREE.InstancedBufferAttribute(this._colors, COLOR_SIZE, false, 1));
+        this.addAttribute('alphaColor', new THREE.InstancedBufferAttribute(alpha, 1, false, 1));
+    }
+}
+export default InstancedSpheresGeometry;
